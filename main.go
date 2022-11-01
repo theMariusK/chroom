@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 )
 
@@ -42,9 +44,9 @@ func start_client() {
 		go handle_server(conn)
 
 		for {
-			var message string
+			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("You: ")
-			fmt.Scanf("%s\n", &message)
+			message, _ := reader.ReadString('\n')
 			conn.Write([]byte(message))
 		}
 	}
@@ -60,7 +62,7 @@ func handle_server(conn net.Conn) {
 			break
 		}
 
-		fmt.Printf("\nThey: %s\n", buffer[:len])
+		fmt.Printf("\nThey: %s", buffer[:len])
 	}
 }
 
@@ -79,9 +81,8 @@ func start_server() {
 			continue
 		}
 
-		ip := "127.0.0.1"
-		fmt.Printf("Listening on: %s:%s...\n", ip, port)
-		conn, err := net.Listen("tcp", ip+":"+port)
+		fmt.Printf("Listening on: %s port...\n", port)
+		conn, err := net.Listen("tcp", ":"+port)
 		defer conn.Close()
 
 		if err != nil {
@@ -101,9 +102,9 @@ func start_server() {
 			defer server.Close()
 
 			for {
-				var message string
+				reader := bufio.NewReader(os.Stdin)
 				fmt.Print("You: ")
-				fmt.Scanf("%s\n", &message)
+				message, _ := reader.ReadString('\n')
 				server.Write([]byte(message))
 			}
 		}
@@ -120,7 +121,7 @@ func handle_client(server net.Conn) {
 			break
 		}
 
-		fmt.Printf("\nThey: %s\n", buffer[:len])
+		fmt.Printf("\nThey: %s", buffer[:len])
 	}
 }
 
