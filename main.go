@@ -3,31 +3,10 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 )
 
-const (
-	INFO  int = 1
-	WARN  int = 2
-	ERROR int = 3
-)
-
-func send_error(signal int, message string) {
-	switch signal {
-	case INFO:
-		fmt.Printf("%s\n", message)
-	case WARN:
-		fmt.Printf("[WARNING] %s\n", message)
-	case ERROR:
-		fmt.Printf("[ERROR] %s\n", message)
-		os.Exit(signal)
-	default:
-		fmt.Printf("Something went wrong!")
-	}
-}
-
-func start_client() int {
+func start_client() {
 	for {
 		fmt.Println("Enter server's IP Address:")
 		var ip string
@@ -50,24 +29,26 @@ func start_client() int {
 			continue
 		}
 
-		fmt.Printf("Connecting to: %s:%s...", ip, port)
+		fmt.Printf("Connecting to: %s:%s...\n", ip, port)
 		conn, err := net.Dial("tcp", ip+":"+port)
 		defer conn.Close()
 
-		msg := "Hey"
-		conn.Write([]byte(msg))
+		if err != nil {
+			fmt.Println("There was an error while connecting to server!")
+			continue
+		}
+		fmt.Println("Connection successful! Write something and press `Enter`")
 
-		reply := make([]byte, 1024)
-		conn.Read(reply)
-
-		fmt.Println(string(reply))
-
-		break
+		for {
+			var message string
+			fmt.Print("You: ")
+			fmt.Scanf("%s\n", &message)
+			conn.Write([]byte(message))
+		}
 	}
-	return 0
 }
 
-func start_server() int {
+func start_server() {
 	for {
 		fmt.Println("Enter Port number to listen (default is 7777):")
 		var port string
@@ -82,26 +63,42 @@ func start_server() int {
 			continue
 		}
 
-		fmt.Printf("Listening on: 127.0.0.1:%s...", port)
-		conn, err := net.Listen("tcp", "127.0.0.1:"+port)
+		ip := "127.0.0.1"
+		fmt.Printf("Listening on: %s:%s...\n", ip, port)
+		conn, err := net.Listen("tcp", ip+":"+port)
 		defer conn.Close()
 
-		for {
-			server, _ := conn.Accept()
-			go processConnection(server)
+		if err != nil {
+			fmt.Println("There was an error while opening connection!")
+			continue
 		}
 
-		break
+		for {
+			server, err := conn.Accept()
+
+			if err != nil {
+				fmt.Println("Error occured while trying to handle the connection!")
+			}
+
+			fmt.Printf("Client %s connected!\n", conn.Addr().String())
+			go handle_client(server)
+			defer server.Close()
+		}
 	}
-	return 0
 }
 
-func processConnection(server net.Conn) {
-	buffer := make([]byte, 1024)
-	len, _ := server.Read(buffer)
-	fmt.Printf("Got message: %s\n", buffer[:len])
-	server.Write([]byte("Thank you!"))
-	server.Close()
+func handle_client(server net.Conn) {
+	for {
+		buffer := make([]byte, 1024)
+		len, err := server.Read(buffer)
+
+		if err != nil {
+			fmt.Println("Client disconnected!")
+			break
+		}
+
+		fmt.Printf("They: %s\n", buffer[:len])
+	}
 }
 
 func main() {
@@ -113,13 +110,12 @@ func main() {
 		fmt.Scanf("%d\n", &ptype)
 
 		if ptype != 1 && ptype != 2 {
-			send_error(INFO, "Please enter 1 (Client) or 2 (Server)")
+			fmt.Println("Please enter 1 (Client) or 2 (Server)")
 			continue
 		}
 
 		if ptype == 1 {
 			start_client()
-			break
 		} else {
 			start_server()
 		}
