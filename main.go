@@ -39,12 +39,28 @@ func start_client() {
 		}
 		fmt.Println("Connection successful! Write something and press `Enter`")
 
+		go handle_server(conn)
+
 		for {
 			var message string
 			fmt.Print("You: ")
 			fmt.Scanf("%s\n", &message)
 			conn.Write([]byte(message))
 		}
+	}
+}
+
+func handle_server(conn net.Conn) {
+	for {
+		buffer := make([]byte, 1024)
+		len, err := conn.Read(buffer)
+
+		if err != nil {
+			fmt.Println("Server disconnected! Reconnecting...")
+			break
+		}
+
+		fmt.Printf("\nThey: %s\n", buffer[:len])
 	}
 }
 
@@ -80,9 +96,16 @@ func start_server() {
 				fmt.Println("Error occured while trying to handle the connection!")
 			}
 
-			fmt.Printf("Client %s connected!\n", conn.Addr().String())
+			fmt.Printf("Client %s connected!\n", server.RemoteAddr().String())
 			go handle_client(server)
 			defer server.Close()
+
+			for {
+				var message string
+				fmt.Print("You: ")
+				fmt.Scanf("%s\n", &message)
+				server.Write([]byte(message))
+			}
 		}
 	}
 }
@@ -93,11 +116,11 @@ func handle_client(server net.Conn) {
 		len, err := server.Read(buffer)
 
 		if err != nil {
-			fmt.Println("Client disconnected!")
+			fmt.Println("Client disconnected! Continuing to listen for connections...")
 			break
 		}
 
-		fmt.Printf("They: %s\n", buffer[:len])
+		fmt.Printf("\nThey: %s\n", buffer[:len])
 	}
 }
 
