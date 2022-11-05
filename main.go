@@ -2,11 +2,78 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"os"
 	"strconv"
 )
+
+// Packet generationW
+
+type packet struct {
+	data_length []byte
+	data        []byte
+	hash        []byte
+}
+
+func create_size(id int) []byte {
+	arr := make([]byte, 2)
+
+	k := 1
+	for n := id % 10; id > 0; {
+		arr[k] = byte(n)
+		k--
+		id = id / 10
+		n = id % 10
+	}
+
+	return arr
+}
+
+func parse_packet(p []byte) (int, string, []byte) {
+	var length int
+	var msg string
+
+	length = int(p[0])*10 + int(p[1])
+
+	for i := 2; i < length+2; i++ {
+		msg += string(p[i])
+	}
+
+	return length, msg, p[length+2:]
+}
+
+func init_packet(msg []byte) packet {
+	length := create_size(len(msg))
+	p := packet{data_length: length, data: msg, hash: generate_checksum(msg)}
+	return p
+}
+
+func generate_checksum(msg []byte) []byte {
+	hash := sha256.New()
+	hash.Write(msg)
+	h := hash.Sum(nil)
+	return h
+}
+
+func send_packet(conn net.Conn, p *packet) {
+	buffer := append(p.data_length, p.data...)
+	buffer = append(buffer, p.hash...)
+	conn.Write(buffer)
+}
+
+func compare_checksum(ch1 []byte, ch2 []byte) bool {
+	for i := 0; i < len(ch1); i++ {
+		if ch1[i] != ch2[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Client-side
 
 func start_client() {
 	for {
@@ -47,7 +114,8 @@ func start_client() {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("You: ")
 			message, _ := reader.ReadString('\n')
-			conn.Write([]byte(message))
+			p := init_packet([]byte(message))
+			send_packet(conn, &p)
 		}
 	}
 }
@@ -66,6 +134,8 @@ func handle_server(conn net.Conn) {
 	}
 }
 
+// Server-side
+
 func start_server() {
 	for {
 		fmt.Println("Enter Port number to listen (default is 7777):")
@@ -82,7 +152,7 @@ func start_server() {
 		}
 
 		fmt.Printf("Listening on: %s port...\n", port)
-		conn, err := net.Listen("tcp", ":"+port)
+		conn, err := net.Listen("tcp", "127.0.0.1:"+port)
 		defer conn.Close()
 
 		if err != nil {
@@ -121,7 +191,11 @@ func handle_client(server net.Conn) {
 			break
 		}
 
-		fmt.Printf("\nThey: %s", buffer[:len])
+		_, msg, hash := parse_packet(buffer[:len])
+
+		if compare_checksum(generate_checksum([]byte(msg)), hash) {
+			fmt.Printf("\nThey: %s", msg)
+		}
 	}
 }
 
