@@ -57,7 +57,7 @@ func generate_checksum(msg []byte) []byte {
 	return h
 }
 
-func send_packet(conn net.Conn, p *packet) {
+func send_packet(conn net.Conn, p packet) {
 	buffer := append(p.data_length, p.data...)
 	buffer = append(buffer, p.hash...)
 	conn.Write(buffer)
@@ -114,8 +114,13 @@ func start_client() {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("You: ")
 			message, _ := reader.ReadString('\n')
+			if len(message) > 99 {
+				fmt.Println("Message is too long!")
+				continue
+			}
+
 			p := init_packet([]byte(message))
-			send_packet(conn, &p)
+			send_packet(conn, p)
 		}
 	}
 }
@@ -126,11 +131,15 @@ func handle_server(conn net.Conn) {
 		len, err := conn.Read(buffer)
 
 		if err != nil {
-			fmt.Println("Server disconnected! Reconnecting...")
+			fmt.Println("Server disconnected!")
 			break
 		}
 
-		fmt.Printf("\nThey: %s", buffer[:len])
+		_, msg, hash := parse_packet(buffer[:len])
+
+		if compare_checksum(generate_checksum([]byte(msg)), hash) {
+			fmt.Printf("\nThey: %s", msg)
+		}
 	}
 }
 
@@ -152,7 +161,7 @@ func start_server() {
 		}
 
 		fmt.Printf("Listening on: %s port...\n", port)
-		conn, err := net.Listen("tcp", "127.0.0.1:"+port)
+		conn, err := net.Listen("tcp", ":"+port)
 		defer conn.Close()
 
 		if err != nil {
@@ -175,7 +184,13 @@ func start_server() {
 				reader := bufio.NewReader(os.Stdin)
 				fmt.Print("You: ")
 				message, _ := reader.ReadString('\n')
-				server.Write([]byte(message))
+				if len(message) > 99 {
+					fmt.Println("Message is too long!")
+					continue
+				}
+
+				p := init_packet([]byte(message))
+				send_packet(server, p)
 			}
 		}
 	}
@@ -187,7 +202,7 @@ func handle_client(server net.Conn) {
 		len, err := server.Read(buffer)
 
 		if err != nil {
-			fmt.Println("Client disconnected! Continuing to listen for connections...")
+			fmt.Println("Client disconnected!")
 			break
 		}
 
